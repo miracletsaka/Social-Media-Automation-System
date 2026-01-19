@@ -133,6 +133,7 @@ export function changePassword(payload: { current_password: string; new_password
 export function registerUser(payload: { email: string; }) {
   return api<{ ok: boolean; message: string }>(`/auth/register`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 }

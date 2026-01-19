@@ -125,6 +125,7 @@ export function changePassword(payload: { current_password: string; new_password
   return api<{ ok: boolean }>(`/auth/change-password`, {
     method: "POST",
     credentials: "include",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 }
@@ -140,6 +141,7 @@ export function loginUser(payload: { email: string; password: string }) {
   return api<{ ok: boolean; user: { id: string; email: string; is_email_verified: boolean } }>(`/auth/login`, {
     method: "POST",
     credentials: "include",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 }
@@ -148,6 +150,7 @@ export function logoutUser() {
   return api<{ ok: boolean }>(`/auth/logout`, {
     method: "POST",
     credentials: "include",
+    headers: { "Content-Type": "application/json" },
   });
 }
 

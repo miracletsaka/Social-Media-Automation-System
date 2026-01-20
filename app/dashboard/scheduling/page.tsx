@@ -361,64 +361,97 @@ export default function SchedulingPage() {
     }
   };
 
-  const ItemRow = ({
-    it,
-    checked,
-    onToggle,
-    showCopy,
-  }: {
-    it: ContentItem;
-    checked: boolean;
-    onToggle: () => void;
-    showCopy?: boolean;
-  }) => (
-    <div className="flex items-center justify-between bg-white shadow rounded p-3 gap-3">
-      <div className="flex items-start gap-3">
-        <Checkbox checked={checked} onCheckedChange={onToggle} />
-        <div className="space-y-1">
-          <div className="flex gap-2 flex-wrap items-center">
-            <Badge className="bg-blue-500 text-xs font-bold text-gray-50">
-              {it.platform}
-            </Badge>
-            <Badge className="bg-orange-500 text-xs font-bold text-gray-50">
-              {it.content_type}
-            </Badge>
-            <Badge className="bg-green-500 text-xs font-bold text-gray-50">{it.status}</Badge>
-            {it.brand_id && (
-              <Badge  className="bg-purple-500 text-xs font-bold text-gray-50">
-                {it.brand_id}
+const ItemRow = ({
+  it,
+  checked,
+  onToggle,
+  showCopy,
+}: {
+  it: ContentItem;
+  checked: boolean;
+  onToggle: () => void;
+  showCopy?: boolean;
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  return (
+    <div className="w-full">
+      {/* Header - Always visible */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white shadow rounded p-3 gap-3">
+        <div className="flex items-start gap-3 flex-1">
+          <Checkbox checked={checked} onCheckedChange={onToggle} />
+          <div className="space-y-1 flex-1">
+            <div className="flex gap-2 flex-wrap items-center">
+              <Badge className="bg-blue-500 text-xs font-bold text-gray-50">
+                {it.platform}
               </Badge>
-            )}
+              <Badge className="bg-orange-500 text-xs font-bold text-gray-50">
+                {it.content_type}
+              </Badge>
+              <Badge className="bg-green-500 text-xs font-bold text-gray-50">{it.status}</Badge>
+              {it.brand_id && (
+                <Badge className="bg-purple-500 text-xs font-bold text-gray-50">
+                  {it.brand_id}
+                </Badge>
+              )}
 
-            {showCopy && (
-              <Button
-                className="bg-white shadow text-xs text-gray-400 hover:text-white"
-                onClick={() => copyText(it)}
-                type="button"
-              >
-                <Clipboard />
-              </Button>
-            )}
-          </div>
+              {showCopy && (
+                <Button
+                  className="bg-white shadow text-xs text-gray-400 hover:text-white"
+                  onClick={() => copyText(it)}
+                  type="button"
+                >
+                  <Clipboard />
+                </Button>
+              )}
+            </div>
 
-          <div className="text-xs text-gray-400 max-w-[760px] truncate">
-            {(it.body_text || it.title || "—").slice(0, 180)}
+            <div className="text-xs text-gray-400 max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-2xl truncate">
+              {(it.body_text || it.title || "—").slice(0, 180)}
+            </div>
           </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center w-full sm:w-auto">
+          <div className="text-[11px] text-gray-400 sm:text-right w-full sm:w-auto">
+            {it.scheduled_at && (
+              <>
+                <div>Scheduled</div>
+                <div>{new Date(it.scheduled_at).toLocaleString()}</div>
+              </>
+            )}
+            <div className="mt-2">Updated</div>
+            <div>{it.updated_at ? new Date(it.updated_at).toLocaleString() : "-"}</div>
+          </div>
+          
+          <Button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="bg-gray-200 text-gray-700 hover:bg-gray-300 text-xs font-medium whitespace-nowrap"
+            size="sm"
+          >
+            {isExpanded ? "Hide" : "Expand"}
+          </Button>
         </div>
       </div>
 
-      <div className="text-[11px] text-gray-400 text-right min-w-[160px]">
-        {it.scheduled_at && (
-          <>
-            <div>Scheduled</div>
-            <div>{new Date(it.scheduled_at).toLocaleString()}</div>
-          </>
-        )}
-        <div className="mt-2">Updated</div>
-        <div>{it.updated_at ? new Date(it.updated_at).toLocaleString() : "-"}</div>
-      </div>
+      {/* Expanded content */}
+      {isExpanded && (
+        <div className="bg-gray-50 shadow rounded p-3 mt-2 text-sm space-y-2">
+          <div>
+            <div className="font-semibold text-gray-700 mb-1">Title</div>
+            <div className="text-gray-600">{it.title || "—"}</div>
+          </div>
+          {it.body_text && (
+            <div>
+              <div className="font-semibold text-gray-700 mb-1">Content</div>
+              <div className="text-gray-600 whitespace-pre-wrap">{it.body_text}</div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
+};
 
   return (
     <div className="space-y-1 bg-gray-100 p-4">

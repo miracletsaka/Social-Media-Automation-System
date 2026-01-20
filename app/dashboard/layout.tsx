@@ -49,7 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       { key: "published", label: "Published", href: "/dashboard/published" },
       { key: "failed", label: "Failed", href: "/dashboard/failed" },
       { key: "platforms", label: "Platforms", href: "/dashboard/platforms" },
-      { key: "brands", label: "Brands", href: "/dashboard/brands" },
+      { key: "brands", label: "Manage brand Profile", href: "/dashboard/settings/brand-profile" },
       { key: "export", label: "Export", href: "/dashboard/export" },
     ],
     []
@@ -66,7 +66,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
 
       {/* Main */}
-      <div className="lg:flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 w-full lg:w-auto">
         {/* Header / Top Nav */}
         <header className="sticky top-0 z-40 bg-gray-100 border-b border-gray-200 ">
           <div className="h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
@@ -150,15 +150,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 />
               </div> */}
 
-              {/* Search (mobile icon) */}
-              <button
-                className="md:hidden p-2 rounded-lg hover:bg-gray-200/60 transition-colors"
-                aria-label="Search"
-                onClick={() => setMobileNavOpen(true)}
-              >
-                <Search className="w-5 h-5 text-gray-700" />
-              </button>
-
               {/* Notifications */}
               <button
                 className="p-2 rounded-lg hover:bg-gray-200/60 transition-colors relative"
@@ -218,7 +209,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 onClick={() => setMobileNavOpen((v) => !v)}
                 className="lg:hidden px-3 py-2 rounded-xl bg-white border border-gray-200 shadow text-xs font-bold text-gray-700 hover:bg-gray-50"
               >
-                Navigate
+                More
               </button>
             </div>
           </div>
@@ -228,15 +219,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="lg:hidden border-t border-gray-200 bg-gray-100">
               <div className="px-4 py-3">
                 {/* Mobile search */}
-                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
-                  <Search className="w-4 h-4 text-gray-500" />
-                  <input
-                    className="w-full text-xs outline-none placeholder:text-gray-400"
-                    placeholder="Search content, topics, ids..."
-                    onChange={() => {}}
-                  />
-                </div>
-
+               
                 {/* Links */}
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   {navItems.map((it) => (

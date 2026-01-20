@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useEffect } from "react"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -39,6 +40,13 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const pathname = usePathname()
 
+  useEffect(() => {
+    // Close sidebar when pathname changes on mobile
+    if (isOpen) {
+      onToggle()
+    }
+  }, [pathname])
+
   return (
     <>
       {/* Overlay for mobile */}
@@ -48,6 +56,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
       <aside
         className={`
           bg-gray-100 flex flex-col
+          fixed lg:relative z-50 h-screen lg:h-auto
           transition-all duration-300 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
           ${isOpen ? "w-72" : "lg:w-20"}

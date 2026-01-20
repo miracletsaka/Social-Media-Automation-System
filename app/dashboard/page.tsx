@@ -71,7 +71,7 @@ export default function DashboardOverview() {
   return (
     <div className="space-y-2 bg-gray-100">
       <DashboardHeroCarousel />
-      <div className="flex items-start font-bold text-xs justify-between px-4">
+      <div className="flex flex-col sm:flex-row sm:items-start font-bold text-xs justify-between px-4 gap-4 sm:gap-0">
         <div>
           <h1 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Overview</h1>
           <p className="text-[11px] font-bold text-gray-400 tracking-wide">
@@ -86,7 +86,7 @@ export default function DashboardOverview() {
       {err && <div className="px-4 text-sm text-red-600">{err}</div>}
 
       {/* KPI CARDS */}
-      <div className="px-4 grid grid-cols-2 md:grid-cols-6 gap-1">
+      <div className="px-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1">
         <Card className="p-4 shadow-none bg-white shadow rounded">
           <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">TOTAL</div>
           <div className="text-sm font-semibold text-gray-400">{loading ? "…" : totalContent}</div>
@@ -103,7 +103,7 @@ export default function DashboardOverview() {
       </div>
 
       {/* PLATFORM + BRAND BREAKDOWN */}
-      <div className="px-4 grid grid-cols-1 md:grid-cols-2 gap-1">
+      <div className="px-4 grid grid-cols-1 lg:grid-cols-2 gap-1">
         <Card className="shadow-none space-y-2">
           <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">By Platform</div>
           {loading ? (
@@ -158,7 +158,7 @@ export default function DashboardOverview() {
             {recent.map((it) => (
               <div
                 key={it.id}
-                className="flex items-center justify-between shadow bg-white rounded p-3 text-sm"
+                className="flex flex-col sm:flex-row sm:items-center justify-between shadow bg-white rounded p-3 text-sm gap-3 sm:gap-0"
               >
                 <div className="space-y-1">
                   <div className="flex gap-2 flex-wrap">
@@ -172,7 +172,7 @@ export default function DashboardOverview() {
                       {it.status.toLowerCase().replaceAll("_", " ")}
                     </Badge>
                   </div>
-                  <p className=" truncate max-w-[600px]">
+                  <p className="truncate max-w-xs sm:max-w-sm md:max-w-md lg:max-w-2xl">
                     {(it.body_text || it.title || "").slice(0, 120) || "—"}
                   </p>
                 </div>

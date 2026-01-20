@@ -151,7 +151,7 @@ export default function DashboardHeroCarousel() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
-            className={`bg-gradient-to-br rounded-b-[60px] sm:rounded-b-[80px] ${currentSlide.bgGradient}`}
+            className={`bg-gradient-to-br py-10 lg:py-0 lg:rounded-b-[80px] ${currentSlide.bgGradient}`}
           >
             <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full">
               <div className="grid lg:grid-cols-2 gap-10 items-center">

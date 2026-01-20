@@ -17,7 +17,7 @@ const JobslyLogin = () => {
       setLoading(true);
       try {
         await loginUser({ email, password });
-        r.push("/dashboard");
+        r.refresh();
       } catch (e: any) {
         setErr(e.message);
       } finally {

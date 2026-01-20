@@ -39,7 +39,7 @@ export default function TopicsPage() {
 
   // Intake
   const [topicsText, setTopicsText] = useState("");
-  const [platforms, setPlatforms] = useState<Platform[]>(["facebook", "instagram", "linkedin"]);
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [types, setTypes] = useState<ContentType[]>(["text"]);
   const [platformOptions, setPlatformOptions] = useState<PlatformRow[]>([]);
   // Generation scope

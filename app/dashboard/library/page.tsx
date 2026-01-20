@@ -208,7 +208,7 @@ export default function LibraryPage() {
 
         {err && <div className="text-sm text-red-600">{err}</div>}
 
-        <div className="rounded space-y-1 overflow-hidden">
+        <div className="rounded space-y-1 overflow-x-auto">
           <div className="grid grid-cols-[140px_120px_140px_1fr_180px_90px] gap-2 p-3 bg-gray-200 text-xs font-bold text-gray-600">
             <div>Platform</div>
             <div>Type</div>
@@ -241,7 +241,7 @@ export default function LibraryPage() {
                 </div>
 
                 <div>
-                  <Badge variant={statusBadgeVariant(it.status)} className="capitalize text-white">
+                  <Badge className="capitalize text-white">
                     {it.status.toLowerCase().replaceAll("_", " ")}
                   </Badge>
                 </div>

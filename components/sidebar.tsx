@@ -15,19 +15,23 @@ import {
   Share,
   Timer,
   User,
+  MessageCircle,
+  Linkedin,
+  Edit,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect } from "react"
 
+
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Platforms", href: "/dashboard/platforms", icon: Share  },
+  { name: "Design Studio", href: "/dashboard/design-studio/admin/template", icon: Edit },
+  { name: "Chats", href: "/dashboard/topic-chats", icon: MessageCircle },
+  { name: "Platforms", href: "/dashboard/platforms", icon: Linkedin  },
   { name: "Brand", href: "/dashboard/brands", icon: Plus },
   { name: "Topics Intake", href: "/dashboard/topics", icon: Upload },
-  { name: "Approvals", href: "/dashboard/approvals", icon: CheckSquare },
   { name: "Content Library", href: "/dashboard/library", icon: Library },
-  { name: "Schedule", href: "/dashboard/scheduling", icon: Timer },
   { name: "Users", href: "/dashboard/users", icon: User },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ]

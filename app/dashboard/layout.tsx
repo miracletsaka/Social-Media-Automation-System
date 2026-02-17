@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, Search, Bell, ChevronDown, User, Settings, LogOut } from "lucide-react";
 import { Sidebar } from "@/components/sidebar";
-import { apiMe, logoutUser } from "@/lib/api";
+import { logoutUser } from "@/lib/api";
 
 type TopNavItem = {
   label: string;
@@ -29,28 +29,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const router = useRouter();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const me = await apiMe();
-        if (!me.is_email_verified) router.replace("/verify-required");
-      } catch {
-        router.replace("/auth/login");
-      }
-    })();
-  }, [router]);
-
   const navItems: TopNavItem[] = useMemo(
     () => [
       { key: "overview", label: "Overview", href: "/dashboard" },
-      { key: "approvals", label: "Approvals", href: "/dashboard/approvals" },
-      { key: "scheduled", label: "Scheduled", href: "/dashboard/scheduling#scheduled" },
-      { key: "queued", label: "Queue", href: "/dashboard/scheduling#queued" },
+      { key: "scheduled", label: "Scheduled", href: "https://publish.buffer.com/all-channels/calendar/week?status=scheduled" },
       { key: "published", label: "Published", href: "/dashboard/published" },
       { key: "failed", label: "Failed", href: "/dashboard/failed" },
       { key: "platforms", label: "Platforms", href: "/dashboard/platforms" },
       { key: "brands", label: "Manage brand Profile", href: "/dashboard/settings/brand-profile" },
-      { key: "export", label: "Export", href: "/dashboard/export" },
     ],
     []
   );

@@ -86,6 +86,15 @@ export default function SchedulingPage() {
   const [showDetails, setShowDetails] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState<string>("");
 
+  const [planMonth, setPlanMonth] = useState(() => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+    return `${yyyy}-${mm}`;
+  });
+  const [timeOfDay, setTimeOfDay] = useState("09:00");
+
+
   const approvedSelectedIds = useMemo(
     () => Object.entries(approvedSelected).filter(([, v]) => v).map(([k]) => k),
     [approvedSelected]
@@ -539,7 +548,7 @@ const ItemRow = ({
             />
             <Button
               className="text-xs font-bold text-gray-50 bg-green-600 text-white"
-              onClick={scheduleSelectedApproved}
+              onClick={confirmPublished}
               disabled={actionLoadingApproved}
             >
               {actionLoadingApproved
@@ -568,193 +577,6 @@ const ItemRow = ({
             <div className="text-xs text-gray-500">No APPROVED items ready to schedule.</div>
           )}
         </div>
-      </Card>
-
-      {/* Publishing Bridge */}
-      <Card className="shadow-none p-4 space-y-4">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex gap-2">
-            <Button
-              className={tab === "scheduled" ? "bg-gray-900 text-white" : "text-xs text-gray-400 font-bold hover:text-white bg-white shadow"}
-              onClick={() => setTab("scheduled")}
-            >
-              Scheduled
-            </Button>
-            <Button
-              className={tab === "queued" ? "bg-gray-900 text-white" : "text-xs text-gray-400 font-bold hover:text-white bg-white shadow"}
-              onClick={() => setTab("queued")}
-            >
-              Queued
-            </Button>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-2 md:items-center">
-            <select
-              className="bg-white shadow rounded px-3 py-2 text-xs text-gray-400"
-              value={brandFilter}
-              onChange={(e) => setBrandFilter(e.target.value)}
-            >
-              <option value="all">All Brands</option>
-              {brands.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.display_name || b.id}
-                </option>
-              ))}
-            </select>
-
-            <select
-              className="bg-white shadow rounded px-3 py-2 text-xs text-gray-400"
-              value={platformFilter}
-              onChange={(e) => setPlatformFilter(e.target.value)}
-            >
-              <option value="all">All Platforms</option>
-              {platforms.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.display_name || p.id}
-                </option>
-              ))}
-            </select>
-
-            <Button
-              className="text-xs text-gray-400 font-bold hover:text-white bg-white shadow"
-              onClick={async () => {
-                await Promise.all([refreshScheduled(), refreshQueued()]);
-              }}
-              disabled={loadingScheduled || loadingQueued}
-            >
-              <RefreshCcw />
-            </Button>
-          </div>
-        </div>
-
-        {tab === "scheduled" && (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs font-bold text-gray-400">
-                Scheduled items: <b>{filteredScheduled.length}</b>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button className="text-xs text-gray-50 font-bold hover:text-white" onClick={exportCsv} disabled={bridgeLoading}>
-                  {bridgeLoading ? "Exporting..." : "Download Buffer CSV"}
-                </Button>
-
-                <Button
-                  className="text-xs text-gray-400 font-bold hover:text-white bg-gray-900 text-white"
-                  onClick={() => toggleAllScheduled(true)}
-                  disabled={filteredScheduled.length === 0 || loadingScheduled}
-                >
-                  Select All
-                </Button>
-
-                <Button
-                  className="text-xs text-gray-400 font-bold hover:text-white bg-white shadow"
-                  onClick={() => toggleAllScheduled(false)}
-                  disabled={filteredScheduled.length === 0 || loadingScheduled}
-                >
-                  Clear
-                </Button>
-
-                <Button
-                  className="text-xs text-gray-400 font-bold hover:text-white bg-blue-600 text-white"
-                  onClick={markSelectedQueued}
-                  disabled={bridgeLoading}
-                >
-                  {bridgeLoading ? "Working..." : `Mark Queued (${scheduledSelectedIds.length})`}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2"  id="scheduled">
-              {loadingScheduled ? (
-                <div className="text-xs text-gray-500">Loading scheduled items...</div>
-              ) : filteredScheduled.length === 0 ? (
-                <div className="text-xs text-gray-500">No SCHEDULED items for this filter.</div>
-              ) : (
-                filteredScheduled.map((it) => (
-                  <ItemRow
-                    key={it.id}
-                    it={it}
-                    checked={!!scheduledSelected[it.id]}
-                    onToggle={() =>
-                      setScheduledSelected((p) => ({ ...p, [it.id]: !p[it.id] }))
-                    }
-                    showCopy
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {tab === "queued" && (
-          <div className="space-y-3" id="queued">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs font-bold text-gray-400">
-                Queued items: <b>{filteredQueued.length}</b>
-              </div>
-
-              <div className="flex flex-wrap gap-2 items-center">
-                <input
-                  className="bg-white shadow rounded px-3 py-2 text-xs text-gray-400 min-w-[280px]"
-                  placeholder="Optional: Published URL (applies to all selected)"
-                  value={publishedUrl}
-                  onChange={(e) => setPublishedUrl(e.target.value)}
-                />
-
-                <Button
-                  className="text-xs text-gray-400 font-bold hover:text-white bg-gray-900 text-white"
-                  onClick={() => toggleAllQueued(true)}
-                  disabled={filteredQueued.length === 0 || loadingQueued}
-                >
-                  Select All
-                </Button>
-
-                <Button
-                  className="text-xs text-gray-400 font-bold hover:text-white bg-white shadow"
-                  onClick={() => toggleAllQueued(false)}
-                  disabled={filteredQueued.length === 0 || loadingQueued}
-                >
-                  Clear
-                </Button>
-
-                <Button
-                  className="text-xs text-gray-50 font-bold hover:text-white bg-green-600"
-                  onClick={confirmPublished}
-                  disabled={bridgeLoading}
-                >
-                  {bridgeLoading ? "Working..." : `Confirm Published (${queuedSelectedIds.length})`}
-                </Button>
-
-                <Button
-                  className="text-xs text-gray-400 font-bold hover:text-white bg-white shadow"
-                  onClick={undoSelectedQueued}
-                  disabled={bridgeLoading}
-                >
-                  {bridgeLoading ? "Working..." : `Undo (${queuedSelectedIds.length})`}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {loadingQueued ? (
-                <div className="text-xs text-gray-500">Loading queued items...</div>
-              ) : filteredQueued.length === 0 ? (
-                <div className="text-xs text-gray-500">No QUEUED items for this filter.</div>
-              ) : (
-                filteredQueued.map((it) => (
-                  <ItemRow
-                    key={it.id}
-                    it={it}
-                    checked={!!queuedSelected[it.id]}
-                    onToggle={() => setQueuedSelected((p) => ({ ...p, [it.id]: !p[it.id] }))}
-                    showCopy
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        )}
       </Card>
     </div>
   );

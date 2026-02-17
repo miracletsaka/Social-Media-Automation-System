@@ -29,8 +29,20 @@ export interface ContentItem {
   status: Status;
 
   title?: string | null;
+
+  // 기존 caption/body
   body_text?: string | null;
   hashtags?: string | null;
+
+  // ✅ NEW: structured fields
+  hook?: string | null;
+  subheading?: string | null;
+  bullets?: string[] | null;     // JSONB in DB
+  proof?: string | null;
+  cta?: string | null;
+
+  // Catch-all structured JSON (if you store additional layout blocks)
+  structured?: Record<string, any> | null; // JSONB in DB
 
   scheduled_at?: string | null;
   published_at?: string | null;
@@ -46,6 +58,38 @@ export interface ContentItem {
   thumbnail_url?: string | null;
   media_provider?: string | null;
   media_caption?: string | null;
+}
+
+export type DraftItem = {
+  id: string;
+  topic_chat_id: string;
+
+  topic: string;
+  brand_id: string;
+  target_month: string;
+  posts_per_week: number;
+
+  platform: string;
+  status: string;
+  body_text?: string | null;
+  hashtags?: string | null;
+  structured?: any;
+  scheduled_at?: string | null;
+
+  media_type?: "image" | "video" | null;
+  media_url?: string | null;
+  media_urls?: string[] | null;
+  thumbnail_url?: string | null;
+  media_provider?: string | null;
+  media_caption?: string | null;
+
+  last_error?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export function getAllDrafts(limit = 200) {
+  return api<DraftItem[]>(`/drafts?limit=${limit}`);
 }
 
 export type Brand = {
@@ -92,7 +136,7 @@ export type UserRow = {
 
 export type Me = { id: string; email: string; is_email_verified: boolean };
 
-async function api<T>(path: string, options?: RequestInit): Promise<T> {
+export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     credentials: "include", 
@@ -120,6 +164,240 @@ export function listUsers() {
     credentials: "include",
   });
 }
+
+export function previewTopicChat(payload: {
+  brand_id: string;
+  topic: string;
+  target_month: string;
+  posts_per_week: number;
+}) {
+  return api<{ will_generate: number }>("/topic-chats/preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function synthesizeAndSaveTemplate(payload?: {
+  brand_id?: string;
+  canvas_width?: number;
+  canvas_height?: number;
+}) {
+  return api<{
+    ok: boolean;
+    template?: any;
+    used_templates?: string[];
+    error?: string;
+  }>("/templates/synthesize-and-save", {
+    method: "POST",
+    credentials: "include",
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+export function synthesizeTemplate() {
+  return api<{ ok: boolean; template?: any; error?: string; used_templates?: string[] }>(
+    "/templates/synthesize",
+    { method: "POST", credentials: "include"
+ }
+  );
+}
+
+// src/lib/api.ts
+export type TopicChat = {
+  id: string;
+  brand_id: string;
+  topic: string;
+  target_month: string;
+  posts_per_week: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type ContentDraft = {
+  id: string;
+  topic_chat_id: string;
+  brand_id: string;
+  platform: string;
+  status: string;
+  body_text?: string | null;
+  hashtags?: string | null;
+  structured?: any;
+  scheduled_at?: string | null;
+  last_error?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export async function generateBackgrounds(
+  topicChatId: string,
+  prompts: string[]
+): Promise<{
+  images: Array<{
+    url: string;
+    prompt: string;
+    generatedAt: string;
+  }>;
+}> {
+  const response = await fetch("/api/generate-backgrounds", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ topicChatId, prompts }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to generate backgrounds");
+  }
+
+  return response.json();
+}
+
+// Save uploaded background image URLs for a topic chat
+export async function saveChatBackgrounds(payload: {
+  topic_chat_id: string
+  urls: string[]
+}) {
+  return api<{ ok: boolean; count: number; background_images: string[] }>(
+    `/topic-chats/${payload.topic_chat_id}/backgrounds`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        // ✅ send what backend expects
+        background_images: payload.urls, // OR background_images: payload.urls
+      }),
+    }
+  )
+}
+
+export async function getDraftById(id: string) {
+  // your drafts are served via "content" routes in your system
+  return api<any>(`/drafts/${id}`, { method: "GET" });
+}
+
+export async function getTemplateById(id: string) {
+  return api<any>(`/templates/${id}`, { method: "GET" });
+}
+
+// Fetch background images for a topic chat
+export async function getChatBackgrounds(topicChatId: string) {
+  return api<{ id: string; image_url: string }[]>(
+    `/chat-backgrounds?topic_chat_id=${topicChatId}`
+  )
+}
+
+
+export async function getTopicChat(id: string) {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/topic-chats/${id}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to load topic chat (${res.status})`);
+  }
+
+  return res.json();
+}
+
+// --- Topic Chats  ---
+
+export async function listTopicChats(limit: number = 50) {
+  const safe = Math.max(1, Math.min(50, Number(limit || 50)));
+  return api<any[]>(`/topic-chats?limit=${safe}`, { method: "GET" });
+}
+
+
+// optional if you want pagination later
+export async function listTopicChatsAll() {
+  return api<any[]>(`/topic-chats`, { method: "GET" });
+}
+
+export async function listTopicChatDrafts(topicChatId: string) {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/topic-chats/${topicChatId}/drafts`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to load topic chat drafts (${res.status})`);
+  }
+
+  return res.json();
+}
+
+
+// optional
+export async function regenerateTopicChat(chatId: string, payload: {
+  brand_profile_summary?: string;
+  brand_profile_json?: any;
+  client_now?: string;
+  timezone?: string;
+  posting_hour_local?: number;
+}) {
+  return api<{ created: number; generated: number; failed?: number }>(
+    `/topic-chats/${chatId}/regenerate`,
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+}
+
+// editing a draft (you likely already have something like this)
+export async function updateDraft(draftId: string, payload: Partial<{
+  hook: string;
+  subheading: string;
+  bullets: string[];
+  proof: string;
+  cta: string;
+  body_text: string;
+  hashtags: string;
+  scheduled_at: string; // ISO
+  platform: string;
+  status: string;
+  structured: any;
+}>) {
+  return api<{ ok: boolean; id: string; updated_at?: string }>(
+    `/content-drafts/${draftId}`,
+    { method: "PATCH", body: JSON.stringify(payload) }
+  );
+}
+
+export type TopicChatCreatePayload = {
+  brand_id: string;
+  topic: string;
+  mode?: "monthly";           // V2 is basically monthly planner
+  target_month: string;       // "YYYY-MM"
+  posts_per_week: number;
+  brand_profile_summary?: string;
+  brand_profile_json?: any;
+  client_now?: string;        // ISO from browser
+  timezone?: string;          // "Europe/London"
+  posting_hour_local?: number; // 9
+  // Optional: if you allow user to choose which platform pages are active later (Option A doesn’t need it)
+};
+
+export type TopicChatCreateResponse = {
+  ok?: boolean;
+  topic_chat_id: string;
+  created: number;
+  generated: number;
+  failed?: number;
+  note?: string;
+};
+
+export function createTopicChatAndGenerate(payload: TopicChatCreatePayload) {
+  // this route should hit your new router: POST /topic-chats
+  return api<TopicChatCreateResponse>("/topic-chats", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 
 export function changePassword(payload: { current_password: string; new_password: string }) {
   return api<{ ok: boolean }>(`/auth/change-password`, {
@@ -197,10 +475,10 @@ export function startBrandScrape(payload: { brand_id: string; website_url: strin
  * POST /media/generate
  * body: { content_item_ids: [...] }
  */
-export async function generateMediaViaMake(content_item_ids: string[]) {
+export async function generateMediaViaMake(draft_ids: string[]) {
   return api<{ generated: number; skipped?: number; skipped_items?: any[] }>(`/media/generate`, {
     method: "POST",
-    body: JSON.stringify({ content_item_ids }),
+    body: JSON.stringify({ draft_ids }),
   });
 }
 
@@ -225,10 +503,10 @@ export async function attachMedia(payload: {
    ✅ PUBLISHING (Make)
    ========================= */
 
-export async function publishViaMake(content_item_ids: string[]) {
+export async function publishViaMake(draft_ids: string[]) {
   return api<{ sent: number; skipped?: number; skipped_items?: any[] }>(`/make/publish`, {
     method: "POST",
-    body: JSON.stringify({ content_item_ids }),
+    body: JSON.stringify({ draft_ids }),
   });
 }
 
@@ -253,6 +531,46 @@ export async function undoQueued(content_item_ids: string[]) {
     body: JSON.stringify({ content_item_ids }),
   });
 }
+
+export async function attachMediaToContentItem(contentItemId: string, payload: {
+  media_type?: "image" | "video";
+  media_url?: string | null;
+  media_urls?: string[] | null;
+  thumbnail_url?: string | null;
+  media_provider?: string | null;
+  media_caption?: string | null;
+}) {
+  return api<{ ok: boolean }> (`/content/${contentItemId}/media`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+
+// ✅ Update editable fields (you need backend PATCH route)
+export function updateContentItem(id: string, patch: any) {
+  return api(`/content/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+// ✅ Upload media (recommended: presigned upload OR backend upload endpoint)
+// For V1 simplest: backend endpoint accepts multipart and returns { url }
+export async function uploadMediaFile(file: File) {
+  const fd = new FormData();
+  fd.append("file", file);
+
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/media/upload`, {
+    method: "POST",
+    body: fd,
+    credentials: "include",
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<{ url: string }>;
+}
+
 
 export async function retryFailed(content_item_ids: string[]) {
   return api<{ retried: number }>(`/publishing/retry-failed`, {
@@ -388,11 +706,29 @@ export function updateBrand(brandId: string, payload: { display_name?: string; i
    ✅ TOPICS + APPROVAL ACTIONS
    ========================= */
 
+   export async function autoScheduleMonth(payload: {
+  brand_id: string;
+  plan_month: string;   // "YYYY-MM"
+  time_of_day?: string; // "09:00"
+  dry_run?: boolean;
+}) {
+  return api<{
+    scheduled: number;
+    plan_month: string;
+    times_per_week: number;
+    preview?: { id: string; scheduled_at: string }[];
+  }>("/planner/auto-schedule-month", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function createTopics(payload: {
   topics: string[];
   brand_id: string;
   platforms: Platform[];
-  content_types: ContentType[];
+  plan_month: string;       // "YYYY-MM"
+  times_per_week: number;
 }) {
   return api<{ content_items_created: number }>("/topics", {
     method: "POST",
@@ -424,30 +760,21 @@ export function bulkReject(ids: string[], reason?: string) {
    ✅ TEXT GENERATION
    ========================= */
 
-export function generateTextDrafts(payload?: {
-  brand_id?: string;
-  content_item_ids?: string[];
-  mode?: "new" | "rejected";
-  platform?: "facebook" | "instagram" | "linkedin";
-  content_type?: "text" | "image" | "video";
-
-  // ✅ brand context (scraped)
+export function generateTextDrafts(payload: {
+  brand_id: string;
+  mode?: "new" | "rejected" | "monthly";
+  platforms?: Platform[];          // ✅ add
+  target_month?: string;           // ✅ add "YYYY-MM"
+  posts_per_week?: number;         // ✅ add
   brand_profile_summary?: string;
   brand_profile_json?: any;
+  client_now?: string;          // ISO
+  timezone?: string;            // IANA
+  posting_hour_local?: number;  
 }) {
-  return api<{ generated: number; note?: string }>("/generation/text", {
+  return api<{ generated?: number; created?: number; note?: string }>("/generation/text", {
     method: "POST",
-    body: JSON.stringify({
-      brand_id: payload?.brand_id ?? "neuroflow-ai",
-      content_item_ids: payload?.content_item_ids,
-      mode: payload?.mode,
-      platform: payload?.platform,
-      content_type: payload?.content_type,
-
-      // ✅ pass through
-      brand_profile_summary: payload?.brand_profile_summary,
-      brand_profile_json: payload?.brand_profile_json,
-    }),
+    body: JSON.stringify(payload),
   });
 }
 

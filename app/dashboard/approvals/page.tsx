@@ -10,6 +10,11 @@ import {
   type ContentItem,
   type Platform,
   type ContentType,
+  listPlatforms,
+  updateContentItem,
+  uploadMediaFile,
+  attachMediaToContentItem,
+  publishViaMake,
 } from "@/lib/api";
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -20,9 +25,34 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import StructuredPost from "@/components/StructuredPost";
+import { uploadFileToSpaces } from "@/lib/upload-client";
 
-const PLATFORMS: (Platform | "all")[] = ["all", "facebook", "instagram", "linkedin"];
 const TYPES: (ContentType | "all")[] = ["all", "text", "image", "video"];
+
+type ActionDetails = {
+  title: string;
+  successLine: string;
+  skipped?: number;
+  skipped_items?: { id: string; status: string; reason: string }[];
+};
+
+function monthKey(it: any) {
+  const iso = it.scheduled_at || it.created_at;
+  if (!iso) return "unscheduled";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "unscheduled";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+function monthLabel(key: string) {
+  if (key === "unscheduled") return "Unscheduled";
+  const [y, m] = key.split("-");
+  return `${y}-${m}`;
+}
+
 
 function fmtDate(iso?: string | null) {
   if (!iso) return "-";
@@ -73,6 +103,7 @@ export default function ApprovalsPage() {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [platformOptions, setPlatformOptions] = useState<{ id: string; display_name: string }[]>([]);
 
   // generation UI state
   const [genLoading, setGenLoading] = useState(false);
@@ -81,6 +112,8 @@ export default function ApprovalsPage() {
   const [genBrand, setGenBrand] = useState("neuroflow-ai");
   const [genType, setGenType] = useState<"all" | "text" | "image" | "video">("text");
   const [genPlatform, setGenPlatform] = useState<"all" | "facebook" | "instagram" | "linkedin">("all");
+  const [month, setMonth] = useState<string>("all");
+  const [uploading, setUploading] = useState(false);
 
   // filters
   const [platform, setPlatform] = useState<(Platform | "all")>("all");
@@ -91,6 +124,12 @@ export default function ApprovalsPage() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const selectedIds = useMemo(() => Object.keys(selected).filter((id) => selected[id]), [selected]);
 
+  const [msg, setMsg] = useState<string | null>(null);
+    const [bridgeLoading, setBridgeLoading] = useState(false);
+  
+    // UX additions
+    const [details, setDetails] = useState<ActionDetails | null>(null);
+    const [showDetails, setShowDetails] = useState(false);
   // preview drawer
   const [active, setActive] = useState<any | null>(null);
 
@@ -98,19 +137,43 @@ export default function ApprovalsPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
-  const filtered = useMemo(() => {
-    return items.filter((it: any) => {
-      if (platform !== "all" && it.platform !== platform) return false;
-      if (ctype !== "all" && it.content_type !== ctype) return false;
+  useEffect(() => {
+  (async () => {
+    try {
+      const p = await listPlatforms(true);
+      setPlatformOptions(p);
+    } catch {}
+  })();
+  refresh();
+}, []);
 
-      const needle = q.trim().toLowerCase();
-      if (!needle) return true;
+const months = useMemo(() => {
+  const set = new Set<string>();
+  for (const it of items as any[]) set.add(monthKey(it));
+  const arr = Array.from(set);
+  // sort newest first; keep "unscheduled" last
+  arr.sort((a, b) => {
+    if (a === "unscheduled") return 1;
+    if (b === "unscheduled") return -1;
+    return a < b ? 1 : -1;
+  });
+  return arr;
+}, [items]);
 
-      const hay =
-        `${it.id} ${it.topic_id} ${it.platform} ${it.content_type} ${it.status} ${it.body_text ?? ""} ${it.hashtags ?? ""} ${it.media_url ?? ""} ${it.media_caption ?? ""}`.toLowerCase();
-      return hay.includes(needle);
-    });
-  }, [items, platform, ctype, q]);
+const filtered = useMemo(() => {
+  return items.filter((it: any) => {
+    if (month !== "all" && monthKey(it) !== month) return false;
+    if (platform !== "all" && it.platform !== platform) return false;
+    if (ctype !== "all" && it.content_type !== ctype) return false;
+
+    const needle = q.trim().toLowerCase();
+    if (!needle) return true;
+
+    const hay =
+      `${it.id} ${it.topic_id} ${it.platform} ${it.content_type} ${it.status} ${it.body_text ?? ""} ${it.hashtags ?? ""} ${it.media_url ?? ""} ${it.media_caption ?? ""}`.toLowerCase();
+    return hay.includes(needle);
+  });
+}, [items, month, platform, ctype, q]);
 
   const allChecked = filtered.length > 0 && filtered.every((it: any) => selected[it.id]);
   const someChecked = filtered.some((it: any) => selected[it.id]);
@@ -122,6 +185,8 @@ export default function ApprovalsPage() {
   };
 
   const toggleOne = (id: string, checked: boolean) => {
+
+    console.log("toggleOne", id, checked);
     setSelected((prev) => ({ ...prev, [id]: checked }));
   };
 
@@ -174,7 +239,7 @@ export default function ApprovalsPage() {
 
   /**
    * ✅ UI triggers generation by calling:
-   * POST /media/generate { content_item_ids: [...] }
+   * POST /media/generate { draft_ids: [...] }
    * This tells Make to generate, then Make calls /media/ingest to attach URLs back.
    */
   const generateMedia = async (ids: string[]) => {
@@ -192,6 +257,107 @@ export default function ApprovalsPage() {
     }
   };
 
+  const [draft, setDraft] = useState<any | null>(null);
+
+  console.log("draft", draft)
+
+useEffect(() => {
+  if (active) {
+    setDraft({
+      hook: active.structured.hook || "",
+      subheading: active.structured.subheading || "",
+      bullets: Array.isArray(active.structured.bullets) ? active.structured.bullets : safeJsonParseArray(active.structured.bullets),
+      proof: active.structured.proof || "",
+      cta: active.structured.cta || "",
+      body_text: active.body_text || "",
+      hashtags: active.structured.hashtags || "",
+      scheduled_at: active.scheduled_at || "",
+    });
+  } else {
+    setDraft(null);
+  }
+}, [active]);
+
+const saveActive = async () => {
+  if (!active || !draft) return;
+  setErr(null);
+
+  try {
+    await updateContentItem(active.id, {
+      hook: draft.hook || null,
+      subheading: draft.subheading || null,
+      bullets: draft.bullets || null,
+      proof: draft.proof || null,
+      cta: draft.cta || null,
+      body_text: draft.body_text || null,
+      hashtags: draft.hashtags || null,
+      scheduled_at: draft.scheduled_at ? new Date(draft.scheduled_at).toISOString() : null,
+    });
+
+    await refresh();
+
+    // reopen the same item after refresh (optional)
+    // simplest: close drawer and user reopens
+    setActive(null);
+  } catch (e: any) {
+    setErr(e.message || "Failed to save edits");
+  }
+};
+
+async function onUploadMedia(file: File) {
+  setUploading(true);
+  try {
+    const url = await uploadFileToSpaces(file);
+
+    // Save to backend content item (PATCH)
+    await attachMediaToContentItem(active.id, {
+      media_type: "image",
+      media_url: url,
+      media_urls: [url],
+      media_provider: "do_spaces",
+    });
+
+    await refresh();
+    alert("✅ Uploaded and attached media.");
+  } catch (e: any) {
+    setErr(e.message || "Upload failed");
+  } finally {
+    setUploading(false);
+  }
+}
+
+console.log("selectedIds", selectedIds);
+
+  const confirmPublished = async () => {
+
+    if (selectedIds.length === 0) {
+      setMsg("⚠️ Select at least one QUEUED item to confirm as PUBLISHED.");
+      return;
+    }
+
+    setBridgeLoading(true);
+    try {
+      const res = await publishViaMake(selectedIds);
+
+ 
+
+      setDetails({
+        title: "Confirm Published",
+        successLine: `Published: ${res}`,
+        skipped: res.skipped,
+        skipped_items: res.skipped_items,
+      });
+      setShowDetails(!!(res.skipped_items && res.skipped_items.length));
+
+    } catch (e: any) {
+      setMsg(`❌ ${e.message || "Mark published failed"}`);
+    } finally {
+      setBridgeLoading(false);
+    }
+  };
+
+  console.log("active", active);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4">
@@ -206,89 +372,6 @@ export default function ApprovalsPage() {
           <Button className="text-white text-xs" onClick={refresh} disabled={loading}>
             {loading ? "Loading..." : "Refresh"}
           </Button>
-
-          {/* <select
-            className="bg-white shadow text-xs text-gray-400 rounded px-3 py-2 min-w-[120px]"
-            value={genPlatform}
-            onChange={(e) => setGenPlatform(e.target.value as any)}
-          >
-            <option value="all">All Platforms</option>
-            <option value="facebook">Facebook</option>
-            <option value="instagram">Instagram</option>
-            <option value="linkedin">LinkedIn</option>
-          </select>
-
-          <select
-            className="bg-white shadow text-xs text-gray-400 rounded px-3 py-2 min-w-[140px]"
-            value={genBrand}
-            onChange={(e) => setGenBrand(e.target.value)}
-          >
-            <option value="neuroflow-ai">neuroflow-ai</option>
-            <option value="leadership-quotes">leadership-quotes</option>
-            <option value="innovative-leadership">innovative-leadership</option>
-            <option value="ai-for-business">ai-for-business</option>
-          </select>
-
-          <select
-            className="bg-white shadow text-xs text-gray-400 rounded px-3 py-2 min-w-[100px]"
-            value={genType}
-            onChange={(e) => setGenType(e.target.value as any)}
-          >
-            <option value="all">All Types</option>
-            <option value="text">Text</option>
-            <option value="image">Image</option>
-            <option value="video">Video</option>
-          </select>
-
-          <Button
-            className="text-white text-xs"
-            onClick={async () => {
-              setErr(null);
-              setGenLoading(true);
-              try {
-                const res = await generateTextDrafts({ brand_id: "neuroflow-ai" });
-                await refresh();
-                alert(`✅ Generated ${res.generated} text drafts and moved them to Pending Approval.`);
-              } catch (e: any) {
-                setErr(e.message || "AI generation failed");
-              } finally {
-                setGenLoading(false);
-              }
-            }}
-            disabled={loading || genLoading}
-          >
-            {genLoading ? "Generating..." : "Generate Drafts (AI)"}
-          </Button> */}
-
-          {/* <Button
-            className="text-white text-xs"
-            onClick={async () => {
-              if (selectedIds.length === 0) return;
-              setErr(null);
-              setGenLoading(true);
-              try {
-                const platformFilter = genPlatform === "all" ? undefined : (genPlatform as any);
-                const typeFilter = genType === "all" ? undefined : (genType as any);
-
-                const res = await generateTextForSelected(
-                  selectedIds,
-                  "neuroflow-ai",
-                  platformFilter,
-                  (typeFilter ?? "text") as any
-                );
-
-                await refresh();
-                alert(`✅ Generated ${res.generated} selected draft(s).`);
-              } catch (e: any) {
-                setErr(e.message || "Generate selected failed");
-              } finally {
-                setGenLoading(false);
-              }
-            }}
-            disabled={loading || genLoading || selectedIds.length === 0}
-          >
-            Generate Selected (AI)
-          </Button> */}
 
           <Button
             className="text-white text-xs"
@@ -322,7 +405,7 @@ export default function ApprovalsPage() {
             {mediaLoading ? "Generating Media..." : `Generate Media (Selected ${selectedIds.length})`}
           </Button>
 
-          <Button className="text-white text-xs" onClick={doBulkApprove} disabled={selectedIds.length === 0 || loading}>
+          <Button className="text-white text-xs" onClick={confirmPublished} disabled={selectedIds.length === 0 || loading}>
             Bulk Approve ({selectedIds.length})
           </Button>
 
@@ -333,7 +416,23 @@ export default function ApprovalsPage() {
       </div>
 
       <Card className="p-4 space-y-4">
-        <div className="grid md:grid-cols-3 gap-3">
+        <div className="grid md:grid-cols-4 gap-3">
+          <div className="space-y-1">
+            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Month</div>
+            <select
+              className="w-full bg-white shadow rounded text-gray-400 text-xs font-bold px-3 py-2"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+            >
+              <option value="all">All</option>
+              {months.map((m) => (
+                <option key={m} value={m}>
+                  {monthLabel(m)}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="space-y-1">
             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Platform</div>
             <select
@@ -341,14 +440,14 @@ export default function ApprovalsPage() {
               value={platform}
               onChange={(e) => setPlatform(e.target.value as any)}
             >
-              {PLATFORMS.map((p) => (
-                <option key={p} value={p}>
-                  {p === "all" ? "All" : p}
+              <option value="all">All</option>
+              {platformOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.display_name}
                 </option>
               ))}
             </select>
           </div>
-
           <div className="space-y-1">
             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Content Type</div>
             <select
@@ -411,7 +510,7 @@ export default function ApprovalsPage() {
                   className="grid grid-cols-[40px_120px_120px_140px_120px_1fr_180px_90px] gap-2 p-3 text-xs shadow bg-white items-center"
                 >
                   <div className="flex items-center justify-center">
-                    <Checkbox checked={!!selected[it.id]} onCheckedChange={(v) => toggleOne(it.id, Boolean(v))} />
+                    <Checkbox checked={!!selected[it.id]} onCheckedChange={(v) => toggleOne(it.draft_id, Boolean(v))} />
                   </div>
 
                   <div>
@@ -530,6 +629,8 @@ export default function ApprovalsPage() {
                   </div>
                 );
               })()}
+              {/* ✅ Structured Preview */}
+              <StructuredPost item={active.structured || {}} />
 
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
                 <div className="font-medium">Content ID</div>
@@ -540,6 +641,103 @@ export default function ApprovalsPage() {
                 <div className="font-medium">Topic ID</div>
                 <div className="text-gray-600 text-xs lowercase break-all">{active.topic_id}</div>
               </div>
+
+              {draft && (
+                <div className="bg-white shadow rounded p-3 space-y-3">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Edit (V1)</div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      style={{ backgroundColor: "white" }}
+                      className="text-xs"
+                      value={draft.hook}
+                      onChange={(e) => setDraft((d: any) => ({ ...d, hook: e.target.value }))}
+                      placeholder="Hook"
+                    />
+                    <Input
+                      style={{ backgroundColor: "white" }}
+                      className="text-xs"
+                      value={draft.subheading}
+                      onChange={(e) => setDraft((d: any) => ({ ...d, subheading: e.target.value }))}
+                      placeholder="Subheading"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="text-[11px] text-gray-500 font-bold mb-1">Bullets (max 3)</div>
+                    {[0, 1, 2].map((i) => (
+                      <Input
+                        key={i}
+                        style={{ backgroundColor: "white" }}
+                        className="text-xs mb-2"
+                        value={draft.bullets?.[i] || ""}
+                        onChange={(e) =>
+                          setDraft((d: any) => {
+                            const next = Array.isArray(d.bullets) ? [...d.bullets] : [];
+                            next[i] = e.target.value;
+                            return { ...d, bullets: next };
+                          })
+                        }
+                        placeholder={`Bullet ${i + 1}`}
+                      />
+                    ))}
+                  </div>
+
+                  <Input
+                    style={{ backgroundColor: "white" }}
+                    className="text-xs"
+                    value={draft.proof}
+                    onChange={(e) => setDraft((d: any) => ({ ...d, proof: e.target.value }))}
+                    placeholder="Proof"
+                  />
+
+                  <Input
+                    style={{ backgroundColor: "white" }}
+                    className="text-xs"
+                    value={draft.cta}
+                    onChange={(e) => setDraft((d: any) => ({ ...d, cta: e.target.value }))}
+                    placeholder="CTA"
+                  />
+
+                  <div>
+                    <div className="text-[11px] text-gray-500 font-bold mb-1">Body Text</div>
+                    <textarea
+                      className="w-full border text-gray-700 rounded p-2 text-xs"
+                      rows={5}
+                      value={draft.body_text}
+                      onChange={(e) => setDraft((d: any) => ({ ...d, body_text: e.target.value }))}
+                    />
+                  </div>
+
+                  <Input
+                    style={{ backgroundColor: "white" }}
+                    className="text-xs"
+                    value={draft.hashtags}
+                    onChange={(e) => setDraft((d: any) => ({ ...d, hashtags: e.target.value }))}
+                    placeholder="#AI #Automation ..."
+                  />
+
+                  <div>
+                    <div className="text-[11px] text-gray-500 font-bold mb-1">Scheduled At</div>
+                    <input
+                      type="datetime-local"
+                      className="w-full border rounded p-2 text-xs"
+                      value={draft.scheduled_at ? draft.scheduled_at.slice(0, 16) : ""}
+                      onChange={(e) => setDraft((d: any) => ({ ...d, scheduled_at: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button className="text-white text-xs" onClick={saveActive}>
+                      Save Changes
+                    </Button>
+                    <Button className="text-white text-xs" variant="outline" onClick={() => setDraft(null)}>
+                      Reset
+                    </Button>
+                  </div>
+                </div>
+              )}
+
 
               <div className="space-y-1">
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Body</div>
@@ -629,12 +827,39 @@ export default function ApprovalsPage() {
                 </div>
               </div>
 
+
+                <div className="bg-white shadow rounded p-3 space-y-2">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Media</div>
+
+                  <input
+                    type="file"
+                    accept="image/*,video/*"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) onUploadMedia(f);
+                    }}
+                  />
+
+                  <Button disabled={uploading} className="text-white text-xs">
+                    {uploading ? "Uploading..." : "Upload Media"}
+                  </Button>
+
+
+                  <div className="text-[11px] text-gray-400">
+                    Tip: Upload is instant. Generate Media uses Make pipeline.
+                  </div>
+                </div>
+
               <div className="flex flex-wrap gap-2 pt-2">
                 <Button
                   className="text-white text-xs"
                   onClick={async () => {
                     try {
-                      await bulkApprove([active.id]);
+                      // add the active item to selectedIds for approval
+                      if (!selectedIds.includes(active.id)) {
+                        setSelected((prev) => ({ ...prev, [active.id]: true }));
+                      }
+                      await confirmPublished();
                       await refresh();
                     } catch (e: any) {
                       setErr(e.message || "Approve failed");
